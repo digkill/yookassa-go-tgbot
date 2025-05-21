@@ -1,6 +1,9 @@
 package main
 
 import (
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
+	"gitlab.com/mediarise/yookassa-go/internal/db"
 	"gitlab.com/mediarise/yookassa-go/internal/handlers"
 	"gitlab.com/mediarise/yookassa-go/internal/services/yookassa"
 	"log"
@@ -9,16 +12,30 @@ import (
 )
 
 func main() {
-	// 💳 Обработка вебхука от Юкассы
+	logrus.SetLevel(logrus.DebugLevel)
+
+	if err := godotenv.Load(); err != nil {
+		logrus.Warnf("load env failed: %v", err)
+	}
+
+	dsn := os.Getenv("DATABASE_URL")
+	db.Init(dsn)
+
+	// Обработка вебхука от Юкассы
 	http.HandleFunc("/webhook", yookassa.WebhookHandler)
 
-	// 💵 Страница оплаты (GET /)
+	// Страница оплаты (GET /)
 	http.HandleFunc("/", handlers.ShowPaymentPage)
 
-	// 💸 Обработка перехода к оплате (GET /pay)
-	http.HandleFunc("/pay", yookassa.CreatePaymentHandler)
+	// Обработка перехода к оплате (GET /pay)
+	http.HandleFunc("/pay", func(w http.ResponseWriter, r *http.Request) {
+		handlers.CreatePaymentHandler(w, r, &db)
+	})
 
-	// 🌐 Запуск сервера
+	// Обработка успешного платежа
+	http.HandleFunc("/success", yookassa.SuccessHandler)
+
+	// Запуск сервера
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8383"
